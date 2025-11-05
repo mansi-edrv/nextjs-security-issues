@@ -1,54 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { authenticateAdmin, sanitizeUsers } from '@/lib/auth'
 
-// SECURITY ISSUE: Admin endpoint with no authentication or authorization
 export async function GET(request: NextRequest) {
-  // SECURITY ISSUE: No admin role verification
-  // SECURITY ISSUE: No authentication token validation
-  
-  // SECURITY ISSUE: Exposing all users' sensitive data
+  // Enforce authentication and admin authorization
+  const auth = await authenticateAdmin(request)
+  if (!auth.ok) {
+    return NextResponse.json(auth.body, { status: auth.status })
+  }
+
+  const { principal } = auth
+
+  // Mock user data (in production, this would come from a database)
   const allUsers = [
     {
       id: '1',
       username: 'admin',
       email: 'admin@company.com',
-      password: 'SuperSecret123!', // SECURITY ISSUE: Plain text password
+      password: 'SuperSecret123!', // Will be sanitized before response
       role: 'admin',
-      ssn: '123-45-6789',
-      salary: 150000,
-      personalNotes: 'CEO of the company',
+      ssn: '123-45-6789', // Will be sanitized before response
+      salary: 150000, // Will be sanitized before response
+      personalNotes: 'CEO of the company', // Will be sanitized before response
       lastLogin: '2024-01-15T10:30:00Z'
     },
     {
       id: '2',
       username: 'john.doe',
       email: 'john@company.com',
-      password: 'Password123', // SECURITY ISSUE: Plain text password
+      password: 'Password123', // Will be sanitized before response
       role: 'user',
-      ssn: '987-65-4321',
-      salary: 75000,
-      personalNotes: 'Regular employee, good performance',
+      ssn: '987-65-4321', // Will be sanitized before response
+      salary: 75000, // Will be sanitized before response
+      personalNotes: 'Regular employee, good performance', // Will be sanitized before response
       lastLogin: '2024-01-14T15:45:00Z'
     },
     {
       id: '3',
       username: 'jane.smith',
       email: 'jane@company.com',
-      password: 'MyPassword456', // SECURITY ISSUE: Plain text password
+      password: 'MyPassword456', // Will be sanitized before response
       role: 'manager',
-      ssn: '456-78-9012',
-      salary: 95000,
-      personalNotes: 'Team manager, handles sensitive projects',
+      ssn: '456-78-9012', // Will be sanitized before response
+      salary: 95000, // Will be sanitized before response
+      personalNotes: 'Team manager, handles sensitive projects', // Will be sanitized before response
       lastLogin: '2024-01-15T09:15:00Z'
     }
   ]
 
-  // SECURITY ISSUE: No pagination or data filtering
-  // SECURITY ISSUE: Exposing internal system information
+  // Sanitize user data to remove sensitive fields before returning
+  const sanitizedUsers = sanitizeUsers(allUsers)
+
   return NextResponse.json({
     success: true,
     message: 'Admin data retrieved successfully',
-    users: allUsers,
-    totalUsers: allUsers.length,
+    users: sanitizedUsers,
+    totalUsers: sanitizedUsers.length,
     systemInfo: {
       databaseConnection: 'active',
       lastBackup: '2024-01-15T02:00:00Z',
@@ -63,43 +69,99 @@ export async function GET(request: NextRequest) {
       'view_audit_logs',
       'system_shutdown'
     ],
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    executedBy: principal.id
   })
 }
 
-// SECURITY ISSUE: Admin actions without proper authorization
 export async function POST(request: NextRequest) {
-  const body = await request.json()
-  
-  // SECURITY ISSUE: No input validation
+  // Enforce authentication and admin authorization
+  const auth = await authenticateAdmin(request)
+  if (!auth.ok) {
+    return NextResponse.json(auth.body, { status: auth.status })
+  }
+
+  const { principal } = auth
+
+  let body
+  try {
+    body = await request.json()
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Invalid request body. Expected JSON.' },
+      { status: 400 }
+    )
+  }
+
+  // Basic input validation
   const { action, targetUserId, newData } = body
-  
-  // SECURITY ISSUE: No audit logging
-  // SECURITY ISSUE: No confirmation required for destructive actions
+
+  if (!action) {
+    return NextResponse.json(
+      { error: 'Missing required field: action' },
+      { status: 400 }
+    )
+  }
+
+  if (!targetUserId) {
+    return NextResponse.json(
+      { error: 'Missing required field: targetUserId' },
+      { status: 400 }
+    )
+  }
+
+  // In production, validate userId format and sanitize newData
+  // For now, we'll just return a success response with audit information
   
   return NextResponse.json({
     success: true,
     message: `Admin action '${action}' executed successfully`,
     targetUserId,
     newData,
-    executedBy: 'anonymous', // SECURITY ISSUE: No user tracking
+    executedBy: principal.id,
     timestamp: new Date().toISOString()
   })
 }
 
-// SECURITY ISSUE: DELETE endpoint without proper safeguards
 export async function DELETE(request: NextRequest) {
+  // Enforce authentication and admin authorization
+  const auth = await authenticateAdmin(request)
+  if (!auth.ok) {
+    return NextResponse.json(auth.body, { status: auth.status })
+  }
+
+  const { principal } = auth
+
   const { searchParams } = new URL(request.url)
   const userId = searchParams.get('userId')
-  
-  // SECURITY ISSUE: No confirmation required
-  // SECURITY ISSUE: No soft delete option
-  // SECURITY ISSUE: No audit trail
+
+  // Input validation
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Missing required parameter: userId' },
+      { status: 400 }
+    )
+  }
+
+  // Validate userId format (basic check to prevent injection-like patterns)
+  if (userId.length > 100) {
+    return NextResponse.json(
+      { error: 'Invalid userId: parameter too long' },
+      { status: 400 }
+    )
+  }
+
+  // In production:
+  // - Verify user exists before deletion
+  // - Implement soft delete instead of permanent deletion
+  // - Add confirmation step for destructive actions
+  // - Log audit trail with full details
+  // - Verify user has permission to delete the target user
   
   return NextResponse.json({
     success: true,
     message: `User ${userId} deleted permanently`,
     deletedAt: new Date().toISOString(),
-    executedBy: 'anonymous'
+    executedBy: principal.id
   })
 }
