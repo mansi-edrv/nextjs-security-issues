@@ -40,13 +40,92 @@ This is a small Next.js application designed to demonstrate common security vuln
    npm install
    ```
 
-2. **Run the development server:**
+2. **Set up environment variables:**
+   
+   Create a `.env.local` file in the root directory with the following:
+   ```bash
+   # JWT Secret for authentication
+   # Generate a strong secret (32 bytes minimum):
+   #   node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+   # Or using openssl:
+   #   openssl rand -base64 32
+   JWT_SECRET=your-generated-secret-here-minimum-32-characters-long
+   ```
+   
+   **Important:** Never commit `.env.local` to version control. It's already in `.gitignore`.
+
+3. **Generate a JWT secret:**
+   ```bash
+   # Using Node.js
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+   
+   # Or using openssl
+   openssl rand -base64 32
+   ```
+   
+   Copy the generated secret and add it to `.env.local` as `JWT_SECRET`.
+
+4. **Run the development server:**
    ```bash
    npm run dev
    ```
 
-3. **Open your browser:**
+5. **Open your browser:**
    Navigate to [http://localhost:3000](http://localhost:3000)
+
+## Authentication and Admin Access
+
+The admin endpoints (`/api/admin/*`) now require authentication with an admin role.
+
+### Generating Admin JWT Tokens
+
+To test admin endpoints, you need to generate a JWT token with `role: 'admin'`. You can create a simple script:
+
+```typescript
+// scripts/generate-admin-token.ts
+import { signToken } from './src/server/jwt'
+
+const token = signToken({
+  sub: 'admin-user-id',
+  role: 'admin',
+}, '1h') // Token expires in 1 hour
+
+console.log('Admin Token:', token)
+console.log('\nUse this in your requests:')
+console.log('Authorization: Bearer', token)
+```
+
+Run it with:
+```bash
+npx tsx scripts/generate-admin-token.ts
+```
+
+### Testing Admin Endpoints
+
+Once you have an admin token, test the endpoints:
+
+```bash
+# Get admin token first (replace TOKEN with actual token)
+TOKEN="your-admin-jwt-token-here"
+
+# Test GET endpoint
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/admin/users
+
+# Test DELETE endpoint
+curl -X DELETE -H "Authorization: Bearer $TOKEN" "http://localhost:3000/api/admin/users?userId=2"
+
+# Test POST endpoint
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"update_role","targetUserId":"2","newData":{"role":"manager"}}' \
+  http://localhost:3000/api/admin/users
+```
+
+**Without authentication:**
+```bash
+# Should return 401 Unauthorized
+curl http://localhost:3000/api/admin/users
+```
 
 ## Testing the Vulnerabilities
 
