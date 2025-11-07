@@ -1,121 +1,74 @@
 import 'server-only'
-import { NextRequest } from 'next/server'
-import { verifyTokenFromHeader, JwtPayload } from '../server/jwt'
+import { Request } from 'next/server'
+import { Env } from '../config/env'
 
 /**
- * Authentication and authorization utilities for protecting admin routes.
+ * Authentication utilities for API routes.
  * Server-only module to prevent client-side exposure.
  */
 
-export interface AuthenticatedPrincipal {
-  id: string
-  role: string
-  sub: string
-}
-
-export interface AuthResult {
-  ok: true
-  principal: AuthenticatedPrincipal
-} | {
-  ok: false
-  status: 401 | 403
-  body: { error: string }
-}
-
 /**
- * Authenticates a request and verifies admin role.
+ * Checks if a request is authorized using Bearer token authentication.
  * 
- * @param request - The incoming request with Authorization header
- * @returns AuthResult with ok: true and principal if authenticated and authorized, 
- *          or ok: false with status and error message if not
+ * @param req - The incoming request
+ * @returns true if the request has a valid Authorization bearer token
  */
-export async function authenticateAdmin(request: NextRequest): Promise<AuthResult> {
-  const authHeader = request.headers.get('authorization')
-
-  // No credentials provided
-  if (!authHeader) {
-    return {
-      ok: false,
-      status: 401,
-      body: { error: 'Authentication required. Please provide an Authorization header.' }
-    }
-  }
-
-  // Verify JWT token
-  let payload: JwtPayload
-  try {
-    payload = verifyTokenFromHeader(authHeader)
-  } catch (error) {
-    // Invalid or expired token
-    return {
-      ok: false,
-      status: 401,
-      body: { error: error instanceof Error ? error.message : 'Invalid authentication token.' }
-    }
-  }
-
-  // Extract user ID and role from token
-  const userId = payload.sub || payload.id as string || 'unknown'
-  const role = payload.role as string || 'user'
-
-  // Verify admin role
-  if (role !== 'admin') {
-    return {
-      ok: false,
-      status: 403,
-      body: { error: 'Forbidden. Admin role required.' }
-    }
-  }
-
-  return {
-    ok: true,
-    principal: {
-      id: userId,
-      role: 'admin',
-      sub: userId
-    }
-  }
-}
-
-/**
- * Sensitive fields that should never be exposed in API responses.
- */
-const SENSITIVE_FIELDS = [
-  'password',
-  'ssn',
-  'salary',
-  'creditCard',
-  'apiKey',
-  'secret',
-  'privateKey',
-  'token',
-  'personalNotes',
-  'internalNotes'
-] as const
-
-/**
- * Sanitizes a user object by removing sensitive fields.
- * 
- * @param user - User object that may contain sensitive data
- * @returns Sanitized user object with only safe fields
- */
-export function sanitizeUser<T extends Record<string, unknown>>(user: T): Omit<T, typeof SENSITIVE_FIELDS[number]> {
-  const sanitized = { ...user }
+export function isAuthorized(req: Request): boolean {
+  const authHeader = req.headers.get('authorization') || ''
   
-  for (const field of SENSITIVE_FIELDS) {
-    delete sanitized[field]
+  // Extract token from "Bearer <token>" format
+  const token = authHeader.startsWith('Bearer ') 
+    ? authHeader.slice(7).trim() 
+    : ''
+  
+  // Validate token matches expected value
+  // Empty token or empty expected token results in unauthorized
+  if (!token || !Env.USER_DATA_API_TOKEN) {
+    return false
   }
   
-  return sanitized
+  // Use constant-time comparison to prevent timing attacks
+  return constantTimeEquals(token, Env.USER_DATA_API_TOKEN)
 }
 
 /**
- * Sanitizes an array of user objects.
+ * Constant-time string comparison to prevent timing attacks.
  * 
- * @param users - Array of user objects
- * @returns Array of sanitized user objects
+ * @param a - First string
+ * @param b - Second string
+ * @returns true if strings are equal
  */
-export function sanitizeUsers<T extends Record<string, unknown>>(users: T[]): Array<Omit<T, typeof SENSITIVE_FIELDS[number]>> {
-  return users.map(user => sanitizeUser(user))
+function constantTimeEquals(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false
+  }
+  
+  let result = 0
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  
+  return result === 0
 }
 
+/**
+ * Verifies admin access using X-Admin-Token header.
+ * 
+ * Checks the X-Admin-Token header against ADMIN_API_TOKEN environment variable.
+ * Uses timing-safe comparison to prevent timing attacks.
+ * 
+ * @param req - The incoming request
+ * @returns true if the request has a valid admin token
+ */
+export function verifyAdminAccess(req: Request): boolean {
+  const adminToken = req.headers.get('x-admin-token')?.trim() || ''
+  const expectedToken = Env.ADMIN_API_TOKEN
+  
+  // Empty token or empty expected token results in unauthorized
+  if (!adminToken || !expectedToken) {
+    return false
+  }
+  
+  // Use constant-time comparison to prevent timing attacks
+  return constantTimeEquals(adminToken, expectedToken)
+}

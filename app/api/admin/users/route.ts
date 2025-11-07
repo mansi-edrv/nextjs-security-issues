@@ -1,69 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { verifyAdminAccess } from '@/lib/auth'
+import { serializeUsers } from '@/lib/serializers'
 
-// SECURITY ISSUE: Admin endpoint with no authentication or authorization
+/**
+ * GET /api/admin/users
+ * 
+ * Returns a list of users for authenticated admin requests only.
+ * 
+ * Security:
+ * - Requires X-Admin-Token header matching ADMIN_API_TOKEN environment variable
+ * - Only returns allowlisted, non-sensitive fields (id, username, email, role)
+ * - Never exposes passwords, SSNs, salaries, or other PII
+ * 
+ * Authentication:
+ * - Request must include header: X-Admin-Token: <token>
+ * - Token must match ADMIN_API_TOKEN from environment variables
+ */
 export async function GET(request: NextRequest) {
-  // SECURITY ISSUE: No admin role verification
-  // SECURITY ISSUE: No authentication token validation
-  
-  // SECURITY ISSUE: Exposing all users' sensitive data
+  // Enforce authentication
+  if (!verifyAdminAccess(request)) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    )
+  }
+
+  // Mock user data (in production, this would come from a database)
+  // NOTE: Internal representation may contain sensitive fields, but they are
+  // never exposed - only serialized safe fields are returned
   const allUsers = [
     {
       id: '1',
       username: 'admin',
       email: 'admin@company.com',
-      password: 'SuperSecret123!', // SECURITY ISSUE: Plain text password
       role: 'admin',
-      ssn: '123-45-6789',
-      salary: 150000,
-      personalNotes: 'CEO of the company',
       lastLogin: '2024-01-15T10:30:00Z'
     },
     {
       id: '2',
       username: 'john.doe',
       email: 'john@company.com',
-      password: 'Password123', // SECURITY ISSUE: Plain text password
       role: 'user',
-      ssn: '987-65-4321',
-      salary: 75000,
-      personalNotes: 'Regular employee, good performance',
       lastLogin: '2024-01-14T15:45:00Z'
     },
     {
       id: '3',
       username: 'jane.smith',
       email: 'jane@company.com',
-      password: 'MyPassword456', // SECURITY ISSUE: Plain text password
       role: 'manager',
-      ssn: '456-78-9012',
-      salary: 95000,
-      personalNotes: 'Team manager, handles sensitive projects',
       lastLogin: '2024-01-15T09:15:00Z'
     }
   ]
 
-  // SECURITY ISSUE: No pagination or data filtering
-  // SECURITY ISSUE: Exposing internal system information
+  // Serialize users to include only allowed, non-sensitive fields
+  // This ensures passwords, SSNs, salaries, and other PII are never exposed
+  const safeUsers = serializeUsers(allUsers)
+
   return NextResponse.json({
-    success: true,
-    message: 'Admin data retrieved successfully',
-    users: allUsers,
-    totalUsers: allUsers.length,
-    systemInfo: {
-      databaseConnection: 'active',
-      lastBackup: '2024-01-15T02:00:00Z',
-      serverLoad: '85%',
-      memoryUsage: '2.1GB',
-      diskSpace: '45%'
-    },
-    adminActions: [
-      'delete_user',
-      'modify_salary',
-      'change_role',
-      'view_audit_logs',
-      'system_shutdown'
-    ],
-    timestamp: new Date().toISOString()
+    users: safeUsers,
+    totalUsers: safeUsers.length
   })
 }
 
