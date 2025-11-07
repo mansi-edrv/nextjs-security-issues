@@ -2,6 +2,11 @@
 
 import { useState } from 'react'
 
+// SECURITY ISSUE: API key exposed in client-side code
+const API_KEY = 'sk-1234567890abcdef1234567890abcdef12345678'
+const DATABASE_PASSWORD = 'admin123!'
+const JWT_SECRET = 'my-super-secret-jwt-key-2024'
+
 export default function Home() {
   const [userData, setUserData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -47,9 +52,20 @@ export default function Home() {
       </div>
 
       <div className="card">
-        <h2>Security Fix Applied</h2>
-        <p>✅ Hardcoded secrets have been removed from client-side code.</p>
-        <p>✅ JWT secrets are now loaded server-side from environment variables only.</p>
+        <h2>Leaked Secrets (Client-Side)</h2>
+        <p>The following secrets are exposed in the client-side JavaScript:</p>
+        
+        <div className="secret-display">
+          <strong>API Key:</strong> {API_KEY}
+        </div>
+        
+        <div className="secret-display">
+          <strong>Database Password:</strong> {DATABASE_PASSWORD}
+        </div>
+        
+        <div className="secret-display">
+          <strong>JWT Secret:</strong> {JWT_SECRET}
+        </div>
       </div>
 
       <div className="card">
